@@ -9,8 +9,9 @@ module OmniAuth
 
       option :name, :surveymonkey
       option :client_options, {
-        site: 'https://www.surveymonkey.com/',
-        authorize_url: '/oauth/authorize'
+        site: 'https://api.surveymonkey.com',
+        authorize_url: '/oauth/authorize',
+        token_url: '/oauth/token'
       }
       option :authorize_options, [:scope]
       uid do
@@ -23,7 +24,11 @@ module OmniAuth
       end
 
       def raw_info
-        @raw_info ||= access_token.get('https://graph.microsoft.com/v1.0/me').parsed
+        @raw_info ||= access_token.get('https://api.surveymonkey.com/v3/users/me').parsed
+      end
+
+      def request_phase
+        redirect client.auth_code.authorize_url(authorize_params.merge(redirect_uri: callback_url))
       end
 
       def authorize_params
@@ -34,7 +39,7 @@ module OmniAuth
             end
           end
 
-          params[:scope] = (DEFAULT_SCOPE + Array(params[:scope])).join(' ')
+          #params[:scope] = (DEFAULT_SCOPE + Array(params[:scope])).join(' ')
         end
       end
 
