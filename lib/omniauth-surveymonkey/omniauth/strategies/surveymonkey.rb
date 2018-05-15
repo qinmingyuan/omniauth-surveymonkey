@@ -1,78 +1,47 @@
+require 'omniauth/strategies/oauth2'
+
 module OmniAuth
   module Strategies
+    class Surveymonkey < OmniAuth::Strategies::OAuth2
+      DEFAULT_SCOPE = [
+        'users_read'
+      ]
 
-    class SurveyMonkey
-      include OmniAuth::Strategy
-
-      configure url: 'https://www.surveymonkey.com/oauth/authorize'
-
-      args [:client_id, :client_secret]
-
-      def request_phase
-        hash = { client_id: options.client_id, api_key: options.api_key, redirect_uri: callback_url, response_type: 'code' }.compact
-        redirect "#{options.url}?#{hash.to_query}"
-      end
-
-      def callback_phase
-        connection = ::Faraday.new url: 'https://api.surveymonkey.net' do |faraday|
-          faraday.request  :url_encoded
-          faraday.response :logger
-          faraday.adapter  ::Faraday.default_adapter
-        end
-
-        form_fields = {
-              client_id: options.client_id,
-          client_secret: options.client_secret,
-                   code: request.params['code'],
-           redirect_uri: (full_host + callback_path),
-             grant_type: 'authorization_code'
-        }
-
-        response = connection.post "/oauth/token#{"?api_key=#{options.api_key}" if options.api_key}", form_fields
-        json = ::MultiJson.load response.body
-
-        options.access_token = json['access_token']
-
-        if options.access_token
-          connection.authorization :Bearer, options.access_token
-          info = connection.get "/v3/users/me?api_key=#{options.api_key}"
-          json = ::MultiJson.load info.body
-
-          options.account_type    = json['account_type']
-          options.email           = json['email']
-          options.email_verified  = json['email_verified']
-          options.first_name      = json['first_name']
-          options.surveymonkey_id = json['id'].to_i
-          options.language        = json['language']
-          options.last_name       = json['last_name']
-          options.username        = json['username']
-        end
-
-        super
-      end
-
+      option :name, :surveymonkey
+      option :client_options, {
+        site: 'https://www.surveymonkey.com/',
+        authorize_url: '/oauth/authorize'
+      }
+      option :authorize_options, [:scope]
       uid do
-        options.surveymonkey_id
+        raw_info['id']
       end
-
-      info do
+      extra do
         {
-           account_type: options.account_type,
-                  email: options.email,
-         email_verified: options.email_verified,
-             first_name: options.first_name,
-              last_name: options.last_name,
-               username: options.username,
-               language: options.language
+          'raw_info' => raw_info
         }
       end
 
-      credentials do
-        { token: options.access_token }
+      def raw_info
+        @raw_info ||= access_token.get('https://graph.microsoft.com/v1.0/me').parsed
+      end
+
+      def authorize_params
+        super.tap do |params|
+          ['display', 'score', 'auth_type'].each do |v|
+            if request.params[v]
+              params[v.to_sym] = request.params[v]
+            end
+          end
+
+          params[:scope] = (DEFAULT_SCOPE + Array(params[:scope])).join(' ')
+        end
+      end
+
+      def callback_url
+        options[:redirect_uri] || (full_host + script_name + callback_path)
       end
 
     end
   end
 end
-
-OmniAuth.config.add_camelization 'surveymonkey', 'SurveyMonkey'

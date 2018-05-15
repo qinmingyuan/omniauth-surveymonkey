@@ -1,5 +1,5 @@
 module OmniAuth
-  module SurveyMonkey
+  module Surveymonkey
     VERSION = '3.0.0'
   end
 end
